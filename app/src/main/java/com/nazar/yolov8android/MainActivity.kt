@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity(), ObjectDetectorHelper.DetectorListener 
     private val isFrontCamera = false
 
     private lateinit var detector: ObjectDetectorHelper
+    private lateinit var objectTracker: ObjectTracker
     private lateinit var bitmapBuffer: Bitmap
 
     private var preview: Preview? = null
@@ -43,8 +44,19 @@ class MainActivity : AppCompatActivity(), ObjectDetectorHelper.DetectorListener 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        objectTracker = ObjectTracker(context)
+        detector = ObjectDetectorHelper(
+            threshold = 0.2f,
+            numThreads = 4,
+            maxResults = 5,
+            currentDelegate = ObjectDetectorHelper.DELEGATE_CPU,
+            context = this,
+            detectorListener = this
+        )
+
         if (allPermissionsGranted()) {
             setUpDetector()
+            objectTracker.addDebugTrack()
             binding.viewFinder.post {
                 setUpCamera()
             }
@@ -272,6 +284,14 @@ class MainActivity : AppCompatActivity(), ObjectDetectorHelper.DetectorListener 
     override fun onResults(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
         runOnUiThread {
             binding.bottomSheetLayout.inferenceTimeVal.text = String.format("%d ms", inferenceTime)
+            
+            val timestamp = System.currentTimeMillis()
+            val events = objectTracker.updateTracks(boundingBoxes, timestamp)
+            
+            if (events.isNotEmpty()) {
+                Log.d(TAG, "Package events: ${events.size}")
+            }
+            
             binding.overlay.apply {
                 setResults(boundingBoxes)
                 invalidate()
